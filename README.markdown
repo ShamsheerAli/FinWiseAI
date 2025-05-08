@@ -123,13 +123,5 @@ npm start
 - **Alpha Vantage Rate Limits**:
   - The free API key has a limit of 25 requests per day. If you exceed this, the backend will use mock data. Wait 24 hours for the limit to reset or obtain a new API key.
 
-## Future Improvements
-- Add real-time X (Twitter) API integration for social sentiment analysis.
-- Enhance visualizations with more charts (e.g., relevance scores for investment recommendations).
-- Implement user authentication and persistent data storage.
-
-## License
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
 ## Contact
-For any questions or issues, feel free to open an issue on GitHub or contact the project maintainer at [your-email@example.com].
+For any questions or issues, feel free to open an issue on GitHub or contact the project maintainer at shamsheeralissa@gmail.com.
