@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware  # Ensure this import is present
+from fastapi.middleware.cors import CORSMiddleware
 from app.models import UserFinanceProfile
 from app.db import save_user_profile
 from transformers import pipeline
@@ -16,23 +16,25 @@ import re  # For regex-based cleaning
 os.environ["TRANSFORMERS_CACHE"] = "C:\\Users\\shams\\.cache\\huggingface\\hub"
 os.environ["HF_HOME"] = "C:\\Users\\shams\\.cache\\huggingface\\hub"
 
-app = FastAPI(title="AI-Powered Personal Finance Advisor")
+app = FastAPI(title="FinWiseAI")
 
 # Add CORS middleware
-print("Adding CORS middleware...")  # Add this for debugging
+print("Adding CORS middleware...")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Allow frontend origin
+    allow_origins=["http://localhost:3004"],  # Allow frontend origin
     allow_credentials=True,
     allow_methods=["*"],  # Allow all methods (GET, POST, etc.)
     allow_headers=["*"],  # Allow all headers
 )
-print("CORS middleware added successfully.")  # Add this for debugging
+print("CORS middleware added successfully.")
 
 # Load models
-advice_generator = pipeline("text2text-generation", model="google/flan-t5-large", max_length=500, num_beams=5, no_repeat_ngram_size=3)
+advice_generator = pipeline("text2text-generation", model="google/flan-t5-large", max_length=500, num_beams=5,
+                            no_repeat_ngram_size=3)
 sentiment_analyzer = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
 embedder = SentenceTransformer('all-MiniLM-L6-v2')
+
 
 # Custom embedding class to adapt SentenceTransformer for LangChain, inheriting from Embeddings
 class SentenceTransformerEmbeddings(Embeddings):
@@ -44,6 +46,7 @@ class SentenceTransformerEmbeddings(Embeddings):
 
     def embed_query(self, text):
         return self.model.encode([text], show_progress_bar=False)[0].tolist()
+
 
 # Create an embedding object compatible with LangChain
 embedding_wrapper = SentenceTransformerEmbeddings(embedder)
@@ -64,6 +67,7 @@ except Exception as e:
     print(f"X API setup failed: {e}")
     x_api = None
 
+
 # Load market data for investment recommendations with risk labels
 def load_market_data():
     try:
@@ -76,10 +80,42 @@ def load_market_data():
         documents = []
         for symbol, risk in symbols:
             time_series_url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}"
+            print(f"Fetching data for {symbol} from URL: {time_series_url}")
             time_series_response = requests.get(time_series_url)
             time_series_response.raise_for_status()
             time_series_data = time_series_response.json()
+            print(f"API response for {symbol}: {time_series_data}")
+
+            # Check for error messages in the response
+            if "Information" in time_series_data and "rate limit" in time_series_data["Information"].lower():
+                print(f"Rate limit exceeded for {symbol}, returning mock data")
+                return [
+                    LangChainDocument(
+                        page_content="Tech sector ETF (TQQQ) - High risk, high reward, suitable for aggressive investors, 15% growth last year.",
+                        metadata={"risk": "Aggressive"}),
+                    LangChainDocument(
+                        page_content="Bond fund (BND) - Low risk, stable returns, ideal for conservative investors, 3% growth last year.",
+                        metadata={"risk": "Conservative"}),
+                    LangChainDocument(
+                        page_content="Real estate investment trust (REIT) - Moderate risk, good for balanced portfolios, 8% growth last year.",
+                        metadata={"risk": "Moderate"})
+                ]
+            if "Error Message" in time_series_data:
+                print(f"Error in API response for {symbol}: {time_series_data['Error Message']}, returning mock data")
+                return [
+                    LangChainDocument(
+                        page_content="Tech sector ETF (TQQQ) - High risk, high reward, suitable for aggressive investors, 15% growth last year.",
+                        metadata={"risk": "Aggressive"}),
+                    LangChainDocument(
+                        page_content="Bond fund (BND) - Low risk, stable returns, ideal for conservative investors, 3% growth last year.",
+                        metadata={"risk": "Conservative"}),
+                    LangChainDocument(
+                        page_content="Real estate investment trust (REIT) - Moderate risk, good for balanced portfolios, 8% growth last year.",
+                        metadata={"risk": "Moderate"})
+                ]
+
             daily_data = time_series_data.get("Time Series (Daily)", {})
+            print(f"Daily data for {symbol}: {daily_data}")
             if daily_data:
                 latest_date, latest_data = list(daily_data.items())[0]  # Get the most recent day
                 close_price = float(latest_data['4. close'])
@@ -89,14 +125,36 @@ def load_market_data():
                         metadata={"risk": risk}
                     )
                 )
+            else:
+                print(f"No daily data available for {symbol}")
+        if not documents:
+            print("No documents fetched from API, returning mock data")
+            return [
+                LangChainDocument(
+                    page_content="Tech sector ETF (TQQQ) - High risk, high reward, suitable for aggressive investors, 15% growth last year.",
+                    metadata={"risk": "Aggressive"}),
+                LangChainDocument(
+                    page_content="Bond fund (BND) - Low risk, stable returns, ideal for conservative investors, 3% growth last year.",
+                    metadata={"risk": "Conservative"}),
+                LangChainDocument(
+                    page_content="Real estate investment trust (REIT) - Moderate risk, good for balanced portfolios, 8% growth last year.",
+                    metadata={"risk": "Moderate"})
+            ]
         return documents
     except Exception as e:
         print(f"Error fetching market data: {e}")
         return [
-            LangChainDocument(page_content="Tech sector ETF (TQQQ) - High risk, high reward, suitable for aggressive investors, 15% growth last year.", metadata={"risk": "Aggressive"}),
-            LangChainDocument(page_content="Bond fund (BND) - Low risk, stable returns, ideal for conservative investors, 3% growth last year.", metadata={"risk": "Conservative"}),
-            LangChainDocument(page_content="Real estate investment trust (REIT) - Moderate risk, good for balanced portfolios, 8% growth last year.", metadata={"risk": "Moderate"})
+            LangChainDocument(
+                page_content="Tech sector ETF (TQQQ) - High risk, high reward, suitable for aggressive investors, 15% growth last year.",
+                metadata={"risk": "Aggressive"}),
+            LangChainDocument(
+                page_content="Bond fund (BND) - Low risk, stable returns, ideal for conservative investors, 3% growth last year.",
+                metadata={"risk": "Conservative"}),
+            LangChainDocument(
+                page_content="Real estate investment trust (REIT) - Moderate risk, good for balanced portfolios, 8% growth last year.",
+                metadata={"risk": "Moderate"})
         ]
+
 
 # Initialize FAISS vector store with market data using the embedding wrapper
 try:
@@ -109,6 +167,7 @@ try:
 except Exception as e:
     print(f"Error initializing FAISS vector store: {e}")
     raise
+
 
 @app.post("/financial_advice/")
 async def financial_advice(profile: UserFinanceProfile):
@@ -167,6 +226,7 @@ async def financial_advice(profile: UserFinanceProfile):
 
     return {"advice": advice}
 
+
 @app.get("/market_sentiment/{sector}")
 async def market_sentiment(sector: str):
     news_texts = []
@@ -205,10 +265,12 @@ async def market_sentiment(sector: str):
         ]
 
     news_sentiments = [sentiment_analyzer(text)[0]['label'] for text in news_texts if text]
-    news_sentiment = "POSITIVE" if news_sentiments.count("POSITIVE") > len(news_sentiments) / 2 else "NEGATIVE" if news_sentiments else "NEUTRAL"
+    news_sentiment = "POSITIVE" if news_sentiments.count("POSITIVE") > len(
+        news_sentiments) / 2 else "NEGATIVE" if news_sentiments else "NEUTRAL"
 
     tweet_sentiments = [sentiment_analyzer(text)[0]['label'] for text in tweet_texts if text]
-    avg_tweet_sentiment = "POSITIVE" if tweet_sentiments.count("POSITIVE") > len(tweet_sentiments) / 2 else "NEGATIVE" if tweet_sentiments else "NEUTRAL"
+    avg_tweet_sentiment = "POSITIVE" if tweet_sentiments.count("POSITIVE") > len(
+        tweet_sentiments) / 2 else "NEGATIVE" if tweet_sentiments else "NEUTRAL"
 
     return {
         "news_sentiment": news_sentiment,
@@ -216,6 +278,7 @@ async def market_sentiment(sector: str):
         "news_articles": news_texts,
         "tweets": tweet_texts
     }
+
 
 @app.post("/investment_recommendations/")
 async def investment_recommendations(profile: UserFinanceProfile):
@@ -231,7 +294,8 @@ async def investment_recommendations(profile: UserFinanceProfile):
         # Adjust relevance scores based on risk tolerance alignment
         risk_mapping = {
             "Conservative": {"Conservative": 1.0, "Moderate": 0.5, "Aggressive": 0.0},
-            "Moderate": {"Conservative": 0.4, "Moderate": 1.0, "Aggressive": 0.6},  # Favor Aggressive slightly over Conservative
+            "Moderate": {"Conservative": 0.4, "Moderate": 1.0, "Aggressive": 0.6},
+            # Favor Aggressive slightly over Conservative
             "Aggressive": {"Conservative": 0.0, "Moderate": 0.5, "Aggressive": 2.0}
         }
         adjusted_results = []
@@ -267,6 +331,8 @@ async def investment_recommendations(profile: UserFinanceProfile):
         print(f"Error in investment_recommendations: {e}")
         raise HTTPException(status_code=500, detail=f"Error generating recommendations: {e}")
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
